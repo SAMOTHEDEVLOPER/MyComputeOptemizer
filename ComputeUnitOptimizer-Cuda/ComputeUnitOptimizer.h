@@ -1,5 +1,5 @@
-#ifndef SEZAM GUESMIA TEBESSA ALGERIE
-#define SEZAM GUESMIA TEBESSA ALGERIE
+#ifndef SEZAM
+#define SEZAM
 
 #include <string>
 #include <vector>
@@ -143,4 +143,4 @@ private:
 #endif
 };
 
-#endif // SEZAM GUESMIA TEBESSA ALGERIE
+#endif // SEZAM
