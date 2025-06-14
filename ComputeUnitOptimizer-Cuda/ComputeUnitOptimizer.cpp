@@ -21,7 +21,7 @@ Point _2Gn; // 2*Gn
 
 ComputeUnitOptimizer::ComputeUnitOptimizer(const std::string& inputFile, int compMode, int searchMode, int coinType, bool useGpu,
 	const std::string& outputFile, bool useSSE, uint32_t maxFound, uint64_t rKey,
-	const std::string& rangeStart, const std::string& rangeEnd, bool& should_exit)
+	const std::string& rangeStart, const std::string& rangeEnd, volatile bool& should_exit)
 {
 	this->compMode = compMode;
 	this->useGpu = useGpu;
@@ -96,7 +96,7 @@ ComputeUnitOptimizer::ComputeUnitOptimizer(const std::string& inputFile, int com
 	BLOOM_N = bloom->get_bytes();
 	TOTAL_COUNT = N;
 	targetCounter = i;
-	printf("\rLoading      : 100 %%\n", i);
+	printf("\rLoading      : 100 %%\n");
 	if (coinType == COIN_BTC) {
 		if (searchMode == SEARCH_MODE_MA)
 			printf("Loaded       : %s Bitcoin addresses\n", formatThousands(i).c_str());
@@ -116,7 +116,7 @@ ComputeUnitOptimizer::ComputeUnitOptimizer(const std::string& inputFile, int com
 
 ComputeUnitOptimizer::ComputeUnitOptimizer(const std::vector<unsigned char>& hashORxpoint, int compMode, int searchMode, int coinType,
 	bool useGpu, const std::string& outputFile, bool useSSE, uint32_t maxFound, uint64_t rKey,
-	const std::string& rangeStart, const std::string& rangeEnd, bool& should_exit)
+	const std::string& rangeStart, const std::string& rangeEnd, volatile bool& should_exit)
 {
 	this->compMode = compMode;
 	this->useGpu = useGpu;
@@ -165,7 +165,12 @@ void ComputeUnitOptimizer::InitGenratorTable()
 
 	char ctimeBuff[64];
 	time_t now = time(NULL);
+#ifdef WIN64
+    ctime_s(ctimeBuff, sizeof(ctimeBuff), &now);
+	printf("Start Time   : %s", ctimeBuff);
+#else
 	printf("Start Time   : %s", ctime_r(&now, ctimeBuff));
+#endif
 
 	if (rKey > 0) {
 		printf("Base Key     : Randomly changes on every %llu Mkeys\n", rKey);
@@ -235,9 +240,8 @@ void ComputeUnitOptimizer::output(std::string addr, std::string pAddr, std::stri
 
 bool ComputeUnitOptimizer::checkPrivKey(std::string addr, Int& key, int32_t incr, bool mode)
 {
-	Int k(key), k2(key);
+	Int k(key);
 	k.Add(incr);
-	k2.Add(incr);
 	
 	Point p = secp->ComputePublicKey(&k);
 	if (secp->GetAddress(mode, p) != addr) {
@@ -256,9 +260,8 @@ bool ComputeUnitOptimizer::checkPrivKey(std::string addr, Int& key, int32_t incr
 
 bool ComputeUnitOptimizer::checkPrivKeyETH(std::string addr, Int& key, int32_t incr)
 {
-	Int k(key), k2(key);
+	Int k(key);
 	k.Add(incr);
-	k2.Add(incr);
 	
 	Point p = secp->ComputePublicKey(&k);
 	if (secp->GetAddressETH(p) != addr) {
@@ -316,7 +319,7 @@ void ComputeUnitOptimizer::processPoint(const Point& p, const Int& baseKey, int 
 		bool match = (searchMode == SEARCH_MODE_MA) ? (CheckBloomBinary(h, 20) > 0) : MatchHash((uint32_t*)h);
 		if (match) {
 			std::string addr = secp->GetAddressETH(h);
-			if (checkPrivKeyETH(addr, baseKey, index)) {
+			if (checkPrivKeyETH(addr, (Int&)baseKey, index)) {
 				nbFoundKey++;
 			}
 		}
@@ -330,7 +333,7 @@ void ComputeUnitOptimizer::processPoint(const Point& p, const Int& baseKey, int 
 		secp->GetHash160(compressed, p, h);
 		if (CheckBloomBinary(h, 20) > 0) {
 			std::string addr = secp->GetAddress(compressed, h);
-			if (checkPrivKey(addr, baseKey, index, compressed)) {
+			if (checkPrivKey(addr, (Int&)baseKey, index, compressed)) {
 				nbFoundKey++;
 			}
 		}
@@ -341,7 +344,7 @@ void ComputeUnitOptimizer::processPoint(const Point& p, const Int& baseKey, int 
 		secp->GetHash160(compressed, p, h);
 		if (MatchHash((uint32_t*)h)) {
 			std::string addr = secp->GetAddress(compressed, h);
-			if (checkPrivKey(addr, baseKey, index, compressed)) {
+			if (checkPrivKey(addr, (Int&)baseKey, index, compressed)) {
 				nbFoundKey++;
 			}
 		}
@@ -351,7 +354,7 @@ void ComputeUnitOptimizer::processPoint(const Point& p, const Int& baseKey, int 
 		unsigned char h[32];
 		secp->GetXBytes(compressed, p, h);
 		if (CheckBloomBinary(h, 32) > 0) {
-			if (checkPrivKeyX(baseKey, index, compressed)) {
+			if (checkPrivKeyX((Int&)baseKey, index, compressed)) {
 				nbFoundKey++;
 			}
 		}
@@ -361,7 +364,7 @@ void ComputeUnitOptimizer::processPoint(const Point& p, const Int& baseKey, int 
 		unsigned char h[32];
 		secp->GetXBytes(compressed, p, h);
 		if (MatchXPoint((uint32_t*)h)) {
-			if (checkPrivKeyX(baseKey, index, compressed)) {
+			if (checkPrivKeyX((Int&)baseKey, index, compressed)) {
 				nbFoundKey++;
 			}
 		}
@@ -736,7 +739,7 @@ void ComputeUnitOptimizer::SetupRanges(uint32_t totalThreads)
 	rangeDiff.Div(&threads);
 }
 
-void ComputeUnitOptimizer::Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSize, bool& should_exit)
+void ComputeUnitOptimizer::Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSize, volatile bool& should_exit)
 {
 	endOfSearch = false;
 	nbCPUThread = nbThread;
@@ -788,8 +791,8 @@ void ComputeUnitOptimizer::Search(int nbThread, std::vector<int> gpuId, std::vec
 		params[param_idx].threadId = 0x80L + i; // Differentiate GPU counters
 		params[param_idx].isRunning = true;
 		params[param_idx].gpuId = gpuId[i];
-		params[param_idx].gridSizeX = gridSize[2 * i];
-		params[param_idx].gridSizeY = gridSize[2 * i + 1];
+		params[param_idx].gridSizeX = gridSize.empty() ? -1 : gridSize[2*i];
+		params[param_idx].gridSizeY = gridSize.empty() ? 128 : gridSize[2*i+1];
 
 		params[param_idx].rangeStart.Set(&rangeStart);
 		rangeStart.Add(&rangeDiff);
@@ -825,7 +828,7 @@ void ComputeUnitOptimizer::Search(int nbThread, std::vector<int> gpuId, std::vec
 
 	Timer::Init();
 	double t0 = Timer::get_tick();
-	double startTime = t0;
+	startTime = t0;
 	Int p100, ICount;
 	p100.SetInt32(100);
 	uint64_t rKeyCount = 0;
@@ -837,7 +840,7 @@ void ComputeUnitOptimizer::Search(int nbThread, std::vector<int> gpuId, std::vec
 		uint64_t count = getCPUCount() + gpuCount;
 
 		double completedPerc = 0.0;
-		if (rKey <= 0 && rangeDiff2.IsZero() == false) {
+		if (rKey <= 0 && !rangeDiff2.IsZero()) {
 			ICount.SetInt64(count);
 			ICount.Mult(&p100);
 			ICount.Div(&this->rangeDiff2);
@@ -865,7 +868,7 @@ void ComputeUnitOptimizer::Search(int nbThread, std::vector<int> gpuId, std::vec
 		avgGpuKeyRate /= (double)nbSample;
 		
 		char timeStr[256];
-		printf("\r[%s] [CPU+GPU: %.2f Mk/s] [GPU: %.2f Mk/s] [C: %.2f %%] [R: %llu] [T: %s] [F: %d]  ",
+		printf("\r[%s] [CPU+GPU: %.2f Mk/s] [GPU: %.2f Mk/s] [C: %.2f %%] [R: %llu] [T: %s] [F: %u]  ",
 			toTimeStr(t1 - startTime, timeStr),
 			avgKeyRate / 1000000.0,
 			avgGpuKeyRate / 1000000.0,
@@ -887,7 +890,7 @@ void ComputeUnitOptimizer::Search(int nbThread, std::vector<int> gpuId, std::vec
 		lastGPUCount = gpuCount;
 		t0 = t1;
 
-		if (should_exit || nbFoundKey >= maxFound || (rKey <= 0 && completedPerc >= 100.0)) {
+		if (should_exit || (maxFound > 0 && nbFoundKey >= maxFound) || (rKey <= 0 && completedPerc >= 100.0)) {
 			endOfSearch = true;
 		}
 	}
