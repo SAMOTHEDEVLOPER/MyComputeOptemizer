@@ -1,0 +1,11 @@
+x64/Release/Found_Eth.txt
+x64/Release/KeyHunt-Cuda.exe
+x64/Release/addresses_to_hash160.py
+x64/Release/eth_addresses_to_bin.py
+x64/Release/pubkeys_to_xpoint.py
+x64/Release/puzzle_1_37_addresses_eth.bin
+x64/Release/puzzle_1_37_addresses_eth_sorted.bin
+x64/Release/puzzle_1_37_hash160_out.bin
+x64/Release/puzzle_1_37_hash160_out_sorted.bin
+x64/Release/xpoints_1_37_out.bin
+x64/Release/xpoints_1_37_out_sorted.bin
