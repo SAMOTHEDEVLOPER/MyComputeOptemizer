@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <iostream>
 #include <cassert>
+#include <inttypes.h> // For PRIu64
 #ifndef WIN64
 #include <pthread.h>
 #endif
@@ -76,7 +77,8 @@ ComputeUnitOptimizer::ComputeUnitOptimizer(const std::string& inputFile, int com
 			bloom->add(buf, K_LENGTH);
 			memcpy(DATA + (i * K_LENGTH), buf, K_LENGTH);
 			if (percent > 0 && i % percent == 0) {
-				printf("\rLoading      : %llu %%", (i / percent));
+				// Use PRIu64 for portable uint64_t printing
+				printf("\rLoading      : %" PRIu64 " %%", (i / percent));
 				fflush(stdout);
 			}
 		}
@@ -173,7 +175,8 @@ void ComputeUnitOptimizer::InitGenratorTable()
 #endif
 
 	if (rKey > 0) {
-		printf("Base Key     : Randomly changes on every %llu Mkeys\n", rKey);
+		// Use PRIu64 for portable uint64_t printing
+		printf("Base Key     : Randomly changes on every %" PRIu64 " Mkeys\n", rKey);
 	}
 	printf("Global start : %s (%d bit)\n", this->rangeStart.GetBase16().c_str(), this->rangeStart.GetBitLength());
 	printf("Global end   : %s (%d bit)\n", this->rangeEnd.GetBase16().c_str(), this->rangeEnd.GetBitLength());
@@ -312,6 +315,9 @@ void* _FindKeyGPU(void* lpParam)
 
 void ComputeUnitOptimizer::processPoint(const Point& p, const Int& baseKey, int index, bool compressed)
 {
+	// Create a non-const copy of baseKey to pass to checker functions
+	Int mutableBaseKey = baseKey;
+	
 	// For ETH, compression is irrelevant as addresses are derived from the full public key
 	if (coinType == COIN_ETH) {
 		unsigned char h[20];
@@ -319,7 +325,7 @@ void ComputeUnitOptimizer::processPoint(const Point& p, const Int& baseKey, int 
 		bool match = (searchMode == SEARCH_MODE_MA) ? (CheckBloomBinary(h, 20) > 0) : MatchHash((uint32_t*)h);
 		if (match) {
 			std::string addr = secp->GetAddressETH(h);
-			if (checkPrivKeyETH(addr, (Int&)baseKey, index)) {
+			if (checkPrivKeyETH(addr, mutableBaseKey, index)) {
 				nbFoundKey++;
 			}
 		}
@@ -333,7 +339,7 @@ void ComputeUnitOptimizer::processPoint(const Point& p, const Int& baseKey, int 
 		secp->GetHash160(compressed, p, h);
 		if (CheckBloomBinary(h, 20) > 0) {
 			std::string addr = secp->GetAddress(compressed, h);
-			if (checkPrivKey(addr, (Int&)baseKey, index, compressed)) {
+			if (checkPrivKey(addr, mutableBaseKey, index, compressed)) {
 				nbFoundKey++;
 			}
 		}
@@ -344,7 +350,7 @@ void ComputeUnitOptimizer::processPoint(const Point& p, const Int& baseKey, int 
 		secp->GetHash160(compressed, p, h);
 		if (MatchHash((uint32_t*)h)) {
 			std::string addr = secp->GetAddress(compressed, h);
-			if (checkPrivKey(addr, (Int&)baseKey, index, compressed)) {
+			if (checkPrivKey(addr, mutableBaseKey, index, compressed)) {
 				nbFoundKey++;
 			}
 		}
@@ -354,7 +360,7 @@ void ComputeUnitOptimizer::processPoint(const Point& p, const Int& baseKey, int 
 		unsigned char h[32];
 		secp->GetXBytes(compressed, p, h);
 		if (CheckBloomBinary(h, 32) > 0) {
-			if (checkPrivKeyX((Int&)baseKey, index, compressed)) {
+			if (checkPrivKeyX(mutableBaseKey, index, compressed)) {
 				nbFoundKey++;
 			}
 		}
@@ -364,7 +370,7 @@ void ComputeUnitOptimizer::processPoint(const Point& p, const Int& baseKey, int 
 		unsigned char h[32];
 		secp->GetXBytes(compressed, p, h);
 		if (MatchXPoint((uint32_t*)h)) {
-			if (checkPrivKeyX((Int&)baseKey, index, compressed)) {
+			if (checkPrivKeyX(mutableBaseKey, index, compressed)) {
 				nbFoundKey++;
 			}
 		}
@@ -868,7 +874,8 @@ void ComputeUnitOptimizer::Search(int nbThread, std::vector<int> gpuId, std::vec
 		avgGpuKeyRate /= (double)nbSample;
 		
 		char timeStr[256];
-		printf("\r[%s] [CPU+GPU: %.2f Mk/s] [GPU: %.2f Mk/s] [C: %.2f %%] [R: %llu] [T: %s] [F: %u]  ",
+		// Use PRIu64 for portable uint64_t printing
+		printf("\r[%s] [CPU+GPU: %.2f Mk/s] [GPU: %.2f Mk/s] [C: %.2f %%] [R: %" PRIu64 "] [T: %s] [F: %u]  ",
 			toTimeStr(t1 - startTime, timeStr),
 			avgKeyRate / 1000000.0,
 			avgGpuKeyRate / 1000000.0,
