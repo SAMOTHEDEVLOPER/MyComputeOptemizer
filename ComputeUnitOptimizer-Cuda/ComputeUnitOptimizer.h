@@ -1,5 +1,5 @@
-#ifndef SEZAM
-#define SEZAM
+#ifndef KEYHUNTH
+#define KEYHUNTH
 
 #include <string>
 #include <vector>
@@ -12,27 +12,21 @@
 #include <pthread.h>
 #endif
 
-// The number of points to calculate in a single CPU batch
 #define CPU_GRP_SIZE (1024*2)
 
 class ComputeUnitOptimizer;
 
-// Structure to pass parameters to each search thread
 typedef struct {
 	ComputeUnitOptimizer* obj;
 	int  threadId;
 	bool isRunning;
 	bool hasStarted;
-
-	// GPU specific parameters
 	int  gridSizeX;
 	int  gridSizeY;
 	int  gpuId;
-
-	// Key range for this thread
 	Int rangeStart;
 	Int rangeEnd;
-	bool rKeyRequest; // Flag to request a new random key
+	bool rKeyRequest;
 } TH_PARAM;
 
 
@@ -42,24 +36,23 @@ public:
 	// Constructor for address/xpoint list mode
 	ComputeUnitOptimizer(const std::string& inputFile, int compMode, int searchMode, int coinType, bool useGpu,
 		const std::string& outputFile, bool useSSE, uint32_t maxFound, uint64_t rKey,
-		const std::string& rangeStart, const std::string& rangeEnd, bool& should_exit);
+		const std::string& rangeStart, const std::string& rangeEnd, volatile bool& should_exit);
 
 	// Constructor for single address/xpoint mode
 	ComputeUnitOptimizer(const std::vector<unsigned char>& hashORxpoint, int compMode, int searchMode, int coinType,
 		bool useGpu, const std::string& outputFile, bool useSSE, uint32_t maxFound, uint64_t rKey,
-		const std::string& rangeStart, const std::string& rangeEnd, bool& should_exit);
+		const std::string& rangeStart, const std::string& rangeEnd, volatile bool& should_exit);
 
 	~ComputeUnitOptimizer();
 
 	// Main entry point to start the search
-	void Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSize, bool& should_exit);
+	void Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSize, volatile bool& should_exit);
 
-	// Thread functions (public for thread creation)
 	void FindKeyCPU(TH_PARAM* p);
 	void FindKeyGPU(TH_PARAM* p);
 
 private:
-	// --- Initialization ---
+	// --- Initialization and Setup ---
 	void InitGenratorTable();
 	void SetupRanges(uint32_t totalThreads);
 	void getCPUStartingKey(Int& tRangeStart, Int& tRangeEnd, Int& key, Point& startP);
@@ -91,51 +84,42 @@ private:
 	std::string formatThousands(uint64_t x);
 	char* toTimeStr(int sec, char* timeStr);
 	
-	// --- Member Variables ---
+	// Member Variables
 	Secp256K1* secp;
 	Bloom* bloom;
-
-	// Search parameters
 	int compMode;
 	int searchMode;
 	int coinType;
 	bool useGpu;
 	bool useSSE;
 	
-	// Thread and progress state
 	bool endOfSearch;
 	int nbCPUThread;
 	int nbGPUThread;
 	uint64_t counters[256];
 	double startTime;
 
-	// Target data
 	std::string inputFile;
-	uint32_t hash160Keccak[5]; // For single address search
-	uint32_t xpoint[8];        // For single x-point search
+	uint32_t hash160Keccak[5];
+	uint32_t xpoint[8];
 	
-	// Key range
 	Int rangeStart;
 	Int rangeEnd;
-	Int rangeDiff;  // Per-thread range size
-	Int rangeDiff2; // Total range size
+	Int rangeDiff;
+	Int rangeDiff2;
 	
-	// Found key management
 	std::string outputFile;
 	uint32_t maxFound;
 	uint32_t nbFoundKey;
 	uint64_t targetCounter;
 
-	// Random key parameters
 	uint64_t rKey;
 	uint64_t lastrKey;
 
-	// Data from input file
 	uint8_t* DATA;
 	uint64_t TOTAL_COUNT;
 	uint64_t BLOOM_N;
 
-	// Mutex for synchronized file/console output
 #ifdef WIN64
 	HANDLE outputMutex;
 #else
@@ -143,4 +127,4 @@ private:
 #endif
 };
 
-#endif // SEZAM
+#endif // KEYHUNTH
