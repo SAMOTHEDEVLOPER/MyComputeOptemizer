@@ -1,56 +1,36 @@
-#ifndef _CMD_PARSE
-#define _CMD_PARSE
+#ifndef CMDPARSE_H
+#define CMDPARSE_H
 
 #include <string>
 #include <vector>
 
+// Represents a single parsed command-line argument
 class OptArg {
-
 public:
+    std::string option;
+    std::string arg;
+    bool hasArg;
 
-	std::string option;
-	std::string arg;
-
-	bool equals(std::string shortForm, std::string longForm = "")
-	{
-		return (shortForm.length() > 0 && option == shortForm) || option == longForm;
-	}
+    // Checks if this option matches a given short or long form.
+    // This method is now const-correct.
+    bool equals(std::string shortForm, std::string longForm = "") const
+    {
+        return (!shortForm.empty() && option == shortForm) || (!longForm.empty() && option == longForm);
+    }
 };
 
-class ArgType {
-
-public:
-	std::string shortForm;
-	std::string longForm;
-	bool hasArg;
-
-};
-
+// A simple command-line parser
 class CmdParse {
-
 private:
-
-	std::vector<ArgType> _argType;
-
-	std::vector<OptArg> _optArgs;
-
-	std::vector<std::string> _operands;
-
-	bool get(const std::string opt, ArgType& t);
+    std::vector<OptArg> options;
+    std::vector<OptArg> args;
+    std::vector<std::string> operands;
 
 public:
-
-	CmdParse();
-
-	void parse(int argc, char** argv);
-
-	void add(const std::string shortForm, const std::string longForm, bool hasArg);
-
-	void add(const std::string shortForm, bool hasArg);
-
-	std::vector<OptArg> getArgs();
-
-	std::vector<std::string> getOperands();
+    void add(std::string shortForm, std::string longForm, bool hasArg);
+    void parse(int argc, char** argv);
+    std::vector<OptArg> getArgs();
+    std::vector<std::string> getOperands();
 };
 
 #endif
