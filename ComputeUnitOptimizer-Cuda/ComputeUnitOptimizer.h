@@ -1,5 +1,5 @@
-#ifndef KEYHUNTH
-#define KEYHUNTH
+#ifndef SEZAM GUESMIA TEBESSA ALGERIE
+#define SEZAM GUESMIA TEBESSA ALGERIE
 
 #include <string>
 #include <vector>
@@ -8,126 +8,139 @@
 #include "GPU/GPUEngine.h"
 #ifdef WIN64
 #include <Windows.h>
+#else
+#include <pthread.h>
 #endif
 
+// The number of points to calculate in a single CPU batch
 #define CPU_GRP_SIZE (1024*2)
 
 class ComputeUnitOptimizer;
 
+// Structure to pass parameters to each search thread
 typedef struct {
 	ComputeUnitOptimizer* obj;
 	int  threadId;
 	bool isRunning;
 	bool hasStarted;
 
+	// GPU specific parameters
 	int  gridSizeX;
 	int  gridSizeY;
 	int  gpuId;
 
+	// Key range for this thread
 	Int rangeStart;
 	Int rangeEnd;
-	bool rKeyRequest;
+	bool rKeyRequest; // Flag to request a new random key
 } TH_PARAM;
 
 
 class ComputeUnitOptimizer
 {
-
 public:
-
-	ComputeUnitOptimizer(const std::string& inputFile, int compMode, int searchMode, int coinType, bool useGpu, 
-		const std::string& outputFile, bool useSSE, uint32_t maxFound, uint64_t rKey, 
+	// Constructor for address/xpoint list mode
+	ComputeUnitOptimizer(const std::string& inputFile, int compMode, int searchMode, int coinType, bool useGpu,
+		const std::string& outputFile, bool useSSE, uint32_t maxFound, uint64_t rKey,
 		const std::string& rangeStart, const std::string& rangeEnd, bool& should_exit);
 
-	ComputeUnitOptimizer(const std::vector<unsigned char>& hashORxpoint, int compMode, int searchMode, int coinType, 
-		bool useGpu, const std::string& outputFile, bool useSSE, uint32_t maxFound, uint64_t rKey, 
+	// Constructor for single address/xpoint mode
+	ComputeUnitOptimizer(const std::vector<unsigned char>& hashORxpoint, int compMode, int searchMode, int coinType,
+		bool useGpu, const std::string& outputFile, bool useSSE, uint32_t maxFound, uint64_t rKey,
 		const std::string& rangeStart, const std::string& rangeEnd, bool& should_exit);
 
 	~ComputeUnitOptimizer();
 
+	// Main entry point to start the search
 	void Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSize, bool& should_exit);
+
+	// Thread functions (public for thread creation)
 	void FindKeyCPU(TH_PARAM* p);
 	void FindKeyGPU(TH_PARAM* p);
 
 private:
-
+	// --- Initialization ---
 	void InitGenratorTable();
-
-	std::string GetHex(std::vector<unsigned char>& buffer);
+	void SetupRanges(uint32_t totalThreads);
+	void getCPUStartingKey(Int& tRangeStart, Int& tRangeEnd, Int& key, Point& startP);
+	void getGPUStartingKeys(Int& tRangeStart, Int& tRangeEnd, int groupSize, int nbThread, Int* keys, Point* p);
+	
+	// --- Point Processing and Verification ---
+	void processPoint(const Point& p, const Int& baseKey, int index, bool compressed);
+	void checkAddressesSSE(bool compressed, Int& key, int i, Point& p1, Point& p2, Point& p3, Point& p4);
+	void processGpuResult(const ITEM& item, Int* keys);
 	bool checkPrivKey(std::string addr, Int& key, int32_t incr, bool mode);
 	bool checkPrivKeyETH(std::string addr, Int& key, int32_t incr);
 	bool checkPrivKeyX(Int& key, int32_t incr, bool mode);
 
-	void checkMultiAddresses(bool compressed, Int key, int i, Point p1);
-	void checkMultiAddressesETH(Int key, int i, Point p1);
-	void checkSingleAddress(bool compressed, Int key, int i, Point p1);
-	void checkSingleAddressETH(Int key, int i, Point p1);
-	void checkMultiXPoints(bool compressed, Int key, int i, Point p1);
-	void checkSingleXPoint(bool compressed, Int key, int i, Point p1);
-
-	void checkMultiAddressesSSE(bool compressed, Int key, int i, Point p1, Point p2, Point p3, Point p4);
-	void checkSingleAddressesSSE(bool compressed, Int key, int i, Point p1, Point p2, Point p3, Point p4);
-
+	// --- Low-level hash matching ---
+	int CheckBloomBinary(const uint8_t* _xx, uint32_t K_LENGTH);
+	bool MatchHash(uint32_t* _h);
+	bool MatchXPoint(uint32_t* _h);
+	
+	// --- Thread Management & Reporting ---
 	void output(std::string addr, std::string pAddr, std::string pAddrHex, std::string pubKey);
 	bool isAlive(TH_PARAM* p);
-
 	bool hasStarted(TH_PARAM* p);
 	uint64_t getGPUCount();
 	uint64_t getCPUCount();
 	void rKeyRequest(TH_PARAM* p);
-	void SetupRanges(uint32_t totalThreads);
-
-	void getCPUStartingKey(Int& tRangeStart, Int& tRangeEnd, Int& key, Point& startP);
-	void getGPUStartingKeys(Int& tRangeStart, Int& tRangeEnd, int groupSize, int nbThread, Int* keys, Point* p);
-
-	int CheckBloomBinary(const uint8_t* _xx, uint32_t K_LENGTH);
-	bool MatchHash(uint32_t* _h);
-	bool MatchXPoint(uint32_t* _h);
+	
+	// --- Utility ---
+	std::string GetHex(const std::vector<unsigned char>& buffer);
 	std::string formatThousands(uint64_t x);
 	char* toTimeStr(int sec, char* timeStr);
-
+	
+	// --- Member Variables ---
 	Secp256K1* secp;
 	Bloom* bloom;
 
-	uint64_t counters[256];
-	double startTime;
-
+	// Search parameters
 	int compMode;
 	int searchMode;
 	int coinType;
-
 	bool useGpu;
+	bool useSSE;
+	
+	// Thread and progress state
 	bool endOfSearch;
 	int nbCPUThread;
 	int nbGPUThread;
-	int nbFoundKey;
-	uint64_t targetCounter;
+	uint64_t counters[256];
+	double startTime;
 
-	std::string outputFile;
+	// Target data
 	std::string inputFile;
-	uint32_t hash160Keccak[5];
-	uint32_t xpoint[8];
-	bool useSSE;
-
+	uint32_t hash160Keccak[5]; // For single address search
+	uint32_t xpoint[8];        // For single x-point search
+	
+	// Key range
 	Int rangeStart;
 	Int rangeEnd;
-	Int rangeDiff;
-	Int rangeDiff2;
-
+	Int rangeDiff;  // Per-thread range size
+	Int rangeDiff2; // Total range size
+	
+	// Found key management
+	std::string outputFile;
 	uint32_t maxFound;
+	uint32_t nbFoundKey;
+	uint64_t targetCounter;
+
+	// Random key parameters
 	uint64_t rKey;
 	uint64_t lastrKey;
 
+	// Data from input file
 	uint8_t* DATA;
 	uint64_t TOTAL_COUNT;
 	uint64_t BLOOM_N;
 
+	// Mutex for synchronized file/console output
 #ifdef WIN64
-	HANDLE ghMutex;
+	HANDLE outputMutex;
 #else
-	pthread_mutex_t  ghMutex;
+	pthread_mutex_t outputMutex;
 #endif
-
 };
 
-#endif // KEYHUNTH
+#endif // SEZAM GUESMIA TEBESSA ALGERIE
